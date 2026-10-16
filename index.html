@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Caza la Vulnerabilidad — Nunsys</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pink:#E6007E;
+    --pink-dark:#B5005F;
+    --pink-light:#FCEAF3;
+    --ink:#1A1A1A;
+    --ink-soft:#4A4A4A;
+    --paper:#FFFFFF;
+    --floor:#FAF9FA;
+    --line:#ECE4E9;
+    --good:#16A34A;
+    --good-bg:#EAF9EF;
+    --code-bg:#0D1117;
+    --code-line:#1C2230;
+    --code-text:#E6EDF3;
+    --radius:18px;
+    --safe-top:env(safe-area-inset-top,0px);
+    --safe-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#F2F0F1; --ink-soft:#C9C3C7; --paper:#17151A; --floor:#111013; --line:#2C2830;
+      --pink-light:#2B1522;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#F2F0F1; --ink-soft:#C9C3C7; --paper:#17151A; --floor:#111013; --line:#2C2830;
+    --pink-light:#2B1522;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--floor); color:var(--ink);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    padding-top:var(--safe-top); padding-bottom:var(--safe-bottom);
+    min-height:100%;
+  }
+  h1,h2,h3,.display{ font-family:'Space Grotesk',sans-serif; letter-spacing:-0.01em; }
+  button{ font-family:inherit; cursor:pointer; }
+  .app{ display:flex; flex-direction:column; min-height:100vh; min-height:100dvh; }
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; padding:14px 22px; background:var(--paper);
+    border-bottom:1px solid var(--line); position:sticky; top:var(--safe-top); z-index:20;
+    flex-wrap:wrap; row-gap:10px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; font-weight:700; font-size:15px; white-space:nowrap; }
+  .brand .dot{ width:10px; height:10px; border-radius:50%; background:var(--pink); }
+  .progress{ display:flex; gap:6px; flex-wrap:nowrap; justify-content:center; overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; }
+  .progress button{
+    width:30px; height:30px; border-radius:50%; border:1.5px solid var(--line); flex:none;
+    background:var(--paper); color:var(--ink-soft); font-size:12px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; transition:.15s;
+  }
+  @media (max-width:640px){
+    .topbar{ padding:12px 16px; }
+    .progress{ order:3; width:100%; justify-content:flex-start; padding-bottom:2px; }
+  }
+  .progress button.active{ background:var(--pink); border-color:var(--pink); color:#fff; }
+  .progress button.done{ border-color:var(--pink); color:var(--pink); }
+  .reset-link{ background:none; border:none; color:var(--ink-soft); font-size:13px; text-decoration:underline; padding:6px; }
+
+  /* ---------- layout ---------- */
+  .layout{ flex:1; display:grid; grid-template-columns: 1fr 300px; gap:0; }
+  @media (max-width: 860px){ .layout{ grid-template-columns: 1fr; } .scoreboard{ order:3; } }
+
+  .stage{ padding:36px clamp(20px,4vw,56px) 60px; display:flex; flex-direction:column; gap:22px; }
+  .kicker{ color:var(--pink); font-weight:700; font-size:14px; }
+  .kicker b{ font-weight:700; }
+  .prompt-card{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--radius);
+    padding:clamp(22px,3vw,36px); box-shadow:0 1px 2px rgba(0,0,0,.03);
+  }
+  .prompt-text{ font-size:clamp(20px,2.6vw,28px); line-height:1.35; font-weight:600; }
+  .hint{ margin-top:14px; color:var(--ink-soft); font-size:15px; }
+
+  .code-block{
+    background:var(--code-bg); border-radius:14px; padding:6px 0; overflow:hidden;
+    font-family:'JetBrains Mono',monospace; font-size:clamp(14px,1.6vw,16.5px);
+  }
+  .code-line{
+    display:flex; align-items:flex-start; gap:14px; padding:10px 20px;
+    border-left:4px solid transparent; color:var(--code-text); white-space:pre;
+    overflow-x:auto;
+  }
+  .code-line .ln{ color:#6E7681; user-select:none; width:1.4em; flex:none; }
+  .code-line .tag{
+    flex:none; width:24px; height:24px; border-radius:6px; background:#222938; color:#9aa4b2;
+    font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center;
+  }
+  .code-line.selectable{ cursor:pointer; }
+  .code-line.selectable:hover{ background:#161B22; }
+  .code-line.picked{ border-left-color:var(--pink); background:#1C1020; }
+  .code-line.correct{ border-left-color:var(--good); background:#0E2016; }
+  .code-line.correct .tag{ background:var(--good); color:#fff; }
+  .code-line.picked .tag{ background:var(--pink); color:#fff; }
+  .code-line.wrong-pick{ border-left-color:#E05252; }
+
+  .options-row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; }
+  .opt-btn{
+    text-align:left; padding:14px 16px; border-radius:12px; border:1.5px solid var(--line);
+    background:var(--paper); color:var(--ink); font-size:15px; font-weight:500; display:flex; gap:10px; align-items:flex-start;
+    transition:.12s;
+  }
+  .opt-btn .tag{ flex:none; width:22px; height:22px; border-radius:6px; background:var(--pink-light); color:var(--pink); font-weight:700; font-size:12.5px; display:flex; align-items:center; justify-content:center; }
+  .opt-btn:hover{ border-color:var(--pink); }
+  .opt-btn.picked{ border-color:var(--pink); background:var(--pink-light); }
+  .opt-btn.correct{ border-color:var(--good); background:var(--good-bg); }
+  .opt-btn.correct .tag{ background:var(--good); color:#fff; }
+
+  .reveal-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .btn{
+    border:none; border-radius:999px; padding:13px 26px; font-weight:700; font-size:15px;
+    background:var(--ink); color:#fff; transition:.12s;
+  }
+  .btn:active{ transform:scale(.97); }
+  .btn.primary{ background:var(--pink); }
+  .btn.ghost{ background:transparent; color:var(--ink); border:1.5px solid var(--line); }
+  .btn:disabled{ opacity:.4; cursor:default; }
+
+  .answer-box{
+    display:none; background:var(--good-bg); border:1px solid #BFE6CC; border-radius:14px; padding:18px 20px;
+    font-size:15.5px; line-height:1.5;
+  }
+  .answer-box.show{ display:block; }
+  .answer-box .label{ color:var(--good); font-weight:700; font-size:13px; margin-bottom:6px; display:block; }
+  .answer-box code{ background:rgba(0,0,0,.06); padding:2px 6px; border-radius:6px; font-family:'JetBrains Mono',monospace; }
+
+  .timer-wrap{ display:flex; align-items:center; gap:12px; }
+  .timer{
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:22px;
+    background:var(--paper); border:1.5px solid var(--line); border-radius:12px; padding:8px 16px; min-width:84px; text-align:center;
+  }
+  .timer.low{ color:#D64545; border-color:#D64545; }
+  .timer-btn{ width:40px; height:40px; border-radius:10px; border:1.5px solid var(--line); background:var(--paper); font-size:16px; }
+
+  .footer-nav{ display:flex; justify-content:space-between; margin-top:auto; padding-top:10px; }
+
+  /* ---------- scoreboard ---------- */
+  .scoreboard{
+    border-left:1px solid var(--line); background:var(--paper); padding:26px 22px;
+    display:flex; flex-direction:column; gap:14px;
+  }
+  @media (max-width:860px){ .scoreboard{ border-left:none; border-top:1px solid var(--line); } }
+  .scoreboard h3{ margin:0 0 4px; font-size:13px; letter-spacing:.04em; color:var(--ink-soft); font-weight:700; }
+  .team-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:12px 14px; border-radius:12px; background:var(--floor);
+  }
+  .team-row .name{ font-weight:600; font-size:15px; display:flex; align-items:center; gap:8px; min-width:0; }
+  .team-row .name span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .swatch{ width:10px; height:10px; border-radius:50%; flex:none; }
+  .score-ctrl{ display:flex; align-items:center; gap:8px; }
+  .score-ctrl .val{ font-family:'JetBrains Mono',monospace; font-weight:700; font-size:18px; min-width:26px; text-align:center; }
+  .score-ctrl button{
+    width:28px; height:28px; border-radius:8px; border:1.5px solid var(--line); background:var(--paper);
+    font-weight:700; color:var(--ink); line-height:1;
+  }
+  .score-ctrl button.plus{ border-color:var(--pink); color:var(--pink); }
+
+  /* ---------- setup screen ---------- */
+  .setup{ flex:1; display:flex; align-items:center; justify-content:center; padding:40px 20px; }
+  .setup-card{ width:100%; max-width:560px; background:var(--paper); border:1px solid var(--line); border-radius:24px; padding:clamp(28px,5vw,44px); }
+  .setup-card h1{ font-size:clamp(26px,4vw,34px); margin:0 0 8px; }
+  .setup-card .lead{ color:var(--ink-soft); font-size:15.5px; margin-bottom:26px; line-height:1.5; }
+  .mode-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px; }
+  @media (max-width:480px){ .mode-grid{ grid-template-columns:1fr; } }
+  .mode-card{
+    border:1.5px solid var(--line); border-radius:16px; padding:16px; text-align:left; background:var(--paper);
+  }
+  .mode-card.active{ border-color:var(--pink); background:var(--pink-light); }
+  .mode-card .n{ font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--pink); font-weight:700; }
+  .mode-card h4{ margin:4px 0 4px; font-size:16px; }
+  .mode-card p{ margin:0; font-size:13.5px; color:var(--ink-soft); line-height:1.4; }
+  .team-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:22px; }
+  .team-input-row{ display:flex; gap:8px; }
+  .team-input-row input{
+    flex:1; padding:12px 14px; border-radius:10px; border:1.5px solid var(--line); font-size:15px;
+    background:var(--paper); color:var(--ink); font-family:inherit;
+  }
+  .team-input-row input:focus{ outline:none; border-color:var(--pink); }
+  .team-input-row button{ width:40px; border-radius:10px; border:1.5px solid var(--line); background:var(--paper); color:#D64545; font-weight:700; }
+  .add-team{ background:none; border:1.5px dashed var(--line); border-radius:10px; padding:11px; color:var(--ink-soft); font-weight:600; font-size:14px; }
+  .start-btn{ width:100%; padding:16px; font-size:16px; }
+
+  /* ---------- end screen ---------- */
+  .end{ flex:1; display:flex; align-items:center; justify-content:center; padding:40px 20px; }
+  .end-card{ text-align:center; max-width:520px; }
+  .end-card .trophy{ font-size:52px; margin-bottom:6px; }
+  .end-card h1{ font-size:clamp(26px,4vw,32px); margin:0 0 6px; }
+  .end-card .winner{ color:var(--pink); font-weight:700; }
+  .final-rank{ margin:26px 0; display:flex; flex-direction:column; gap:8px; }
+  .final-row{ display:flex; justify-content:space-between; padding:12px 18px; border-radius:12px; background:var(--paper); border:1px solid var(--line); font-weight:600; }
+  .final-row:first-child{ border-color:var(--pink); background:var(--pink-light); }
+
+  .visually-hidden{ position:absolute; width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0); }
+
+  .answer-form{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .answer-form select{
+    padding:12px 12px; border-radius:12px; border:1.5px solid var(--line); background:var(--paper); color:var(--ink);
+    font-family:inherit; font-size:15px; font-weight:600;
+  }
+  .answer-form input{
+    flex:1; min-width:240px; padding:13px 16px; border-radius:12px; border:1.5px solid var(--line);
+    background:var(--paper); color:var(--ink); font-family:'JetBrains Mono',monospace; font-size:15px;
+  }
+  .answer-form input:focus, .answer-form select:focus{ outline:none; border-color:var(--pink); }
+  .feedback{ display:none; border-radius:12px; padding:12px 16px; font-size:15px; font-weight:600; align-items:center; gap:12px; flex-wrap:wrap; }
+  .feedback.show{ display:flex; }
+  .feedback.ok{ background:var(--good-bg); color:#15803D; border:1px solid #BFE6CC; }
+  .feedback.bad{ background:#FDEEEE; color:#B42318; border:1px solid #F4C7C3; }
+  .feedback .btn{ padding:8px 16px; font-size:14px; }
+  .hint-box{
+    background:var(--pink-light); border:1px solid #F3BCD9; border-radius:14px; padding:16px 20px; font-size:16px; line-height:1.5;
+  }
+  .hint-box .label{ color:var(--pink); font-weight:800; font-size:12px; letter-spacing:.05em; display:block; margin-bottom:4px; }
+  .btn.link{ background:none; color:var(--ink-soft); font-weight:600; text-decoration:underline; padding:13px 8px; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .feedback.bad{ background:#3a1517; color:#ffb4ae; border-color:#5a2226; } }
+
+  .layout{ display:block; max-width:980px; width:100%; margin:0 auto; }
+  .stage{ padding:34px clamp(18px,4vw,40px) 60px; }
+
+  .progress button.ok{ background:#16A34A; border-color:#16A34A; color:#fff; }
+  .progress button.bad{ border-color:#D64545; color:#D64545; }
+  .end{ align-items:flex-start; padding-top:40px; }
+  .end-card.result{ max-width:760px; width:100%; text-align:left; }
+  .score-big{ font-family:'Space Grotesk',sans-serif; font-size:72px; line-height:1; margin:6px 0 14px; }
+  .score-big b{ color:var(--pink); } .score-big span{ font-size:32px; color:var(--ink-soft); font-weight:500; }
+  .score-bar{ height:12px; background:var(--line); border-radius:99px; overflow:hidden; }
+  .score-fill{ height:100%; background:var(--pink); border-radius:99px; }
+  .verdict{ font-size:18px; font-weight:600; margin:18px 0 4px; }
+  .score-detail{ color:var(--ink-soft); font-size:15px; margin:0 0 6px; }
+  .end-card.result h2{ font-size:20px; margin:30px 0 12px; }
+  .review-item{ background:var(--paper); border:1px solid var(--line); border-left:4px solid #D64545; border-radius:14px; padding:16px 18px; margin-bottom:12px; font-size:15px; line-height:1.5; }
+  .r-title{ color:var(--pink); font-weight:800; font-size:12px; letter-spacing:.04em; margin-bottom:4px; }
+  .r-prompt{ font-weight:600; margin-bottom:10px; }
+  .r-line{ display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; margin-bottom:6px; }
+  .r-line > span{ color:var(--ink-soft); font-size:13px; min-width:74px; font-weight:600; }
+  .r-line code{ background:rgba(0,0,0,.06); padding:2px 8px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:13.5px; word-break:break-all; }
+  .r-exp{ margin-top:8px; color:var(--ink-soft); }
+  .r-exp code, .r-note code{ background:rgba(0,0,0,.06); padding:1px 6px; border-radius:6px; font-family:'JetBrains Mono',monospace; }
+  .r-note{ color:#B42318; font-size:14px; margin-top:2px; }
+  .end-actions{ display:flex; gap:10px; margin-top:26px; flex-wrap:wrap; }
+
+  .opt-btn.wrong{ border-color:#D64545; background:#FDEEEE; }
+  .opt-btn.wrong .tag{ background:#D64545; color:#fff; }
+  .opt-btn:disabled{ cursor:default; }
+  .explain{ border-radius:14px; padding:16px 20px; font-size:15.5px; line-height:1.55; border:1px solid; }
+  .explain.ok{ background:var(--good-bg); border-color:#BFE6CC; }
+  .explain.bad{ background:#FDEEEE; border-color:#F4C7C3; }
+  .explain .label{ font-weight:800; font-size:13px; display:block; margin-bottom:6px; }
+  .explain.ok .label{ color:#15803D; } .explain.bad .label{ color:#B42318; }
+  .explain code{ background:rgba(0,0,0,.07); padding:2px 6px; border-radius:6px; font-family:'JetBrains Mono',monospace; }
+  .code-line.correct.shown .tag{ background:var(--good); color:#fff; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .explain.bad{ background:#3a1517; border-color:#5a2226; } :root:not([data-theme="light"]) .opt-btn.wrong{ background:#3a1517; } }
+</style>
+</head>
+<body>
+<div id="app" class="app"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var QUESTIONS = [
+    { id:1, topic:"Inyección SQL", type:"line",
+      prompt:"Este código procesa un formulario de login. ¿Qué línea es la vulnerable?",
+      code:[
+        "$user = $_POST['username'];",
+        "$pass = $_POST['password'];",
+        "$query = \"SELECT * FROM usuarios WHERE user='$user' AND pass='$pass'\";",
+        "$resultado = $conexion->query($query);"
+      ], correct:2,
+      explanation:"La línea C concatena las variables del formulario directamente en la consulta SQL. Un atacante puede enviar <code>' OR '1'='1</code> como usuario y alterar la lógica de la consulta. La solución son las consultas parametrizadas (<em>prepared statements</em>)."
+    },
+    { id:2, topic:"Cross-Site Scripting (XSS)", type:"line",
+      prompt:"Esta página muestra los comentarios de los usuarios. ¿Qué línea es la vulnerable?",
+      code:[
+        "$comentario = $_GET['comentario'];",
+        "echo \"<div class='comentario'>\" . $comentario . \"</div>\";",
+        "guardarEnBaseDeDatos($comentario);",
+        "mostrarPagina();"
+      ], correct:1,
+      explanation:"La línea B imprime el comentario en el HTML sin escapar. Un atacante puede enviar <code>&lt;script&gt;</code> que se ejecutará en el navegador de cualquiera que vea el comentario. Se corrige escapando la salida (<code>htmlspecialchars</code>) y con una política CSP."
+    },
+    { id:3, topic:"Inyección de comandos", type:"line",
+      prompt:"Esta herramienta de diagnóstico hace un ping a la IP que indica el usuario. ¿Qué línea es la vulnerable?",
+      code:[
+        "$ip = $_GET['ip'];",
+        "$comando = \"ping -c 4 \" . $ip;",
+        "$salida = shell_exec($comando);",
+        "echo $salida;"
+      ], correct:1,
+      explanation:"La línea B concatena la entrada del usuario en un comando de sistema. Añadiendo algo como <code>; cat /etc/passwd</code> en el campo, el atacante ejecuta comandos adicionales en el servidor. Hay que validar la entrada (por ejemplo, con <code>filter_var</code> como IP) y evitar pasar datos del usuario a la shell."
+    },
+    { id:4, topic:"CSRF", type:"opt",
+      prompt:"Este formulario cambia la contraseña del usuario autenticado. ¿Qué le falta para estar protegido frente a CSRF?",
+      code:[
+        "<form action=\"/cambiar-password\" method=\"POST\">",
+        "  <input type=\"password\" name=\"nueva_pass\">",
+        "  <input type=\"submit\" value=\"Cambiar\">",
+        "</form>"
+      ],
+      options:[
+        "Un campo oculto con un token CSRF único por sesión",
+        "Más reglas de validación sobre la contraseña",
+        "Un captcha antes de enviar el formulario",
+        "Forzar que la página use HTTPS"
+      ], correct:0,
+      explanation:"Sin un token CSRF que el servidor verifique, una web maliciosa puede inducir al navegador de una víctima ya autenticada a enviar este formulario sin que se entere. El captcha, las reglas de contraseña y HTTPS no evitan esto por sí solos."
+    },
+    { id:5, topic:"File Inclusion / Path Traversal", type:"line",
+      prompt:"Esta página carga documentos de la carpeta /var/www/docs según un parámetro. ¿Qué línea es la vulnerable?",
+      code:[
+        "$archivo = $_GET['pagina'];",
+        "$ruta = \"/var/www/docs/\" . $archivo;",
+        "if (file_exists($ruta)) {",
+        "    include($ruta);"
+      ], correct:1,
+      explanation:"La línea B construye la ruta sin validar <code>$archivo</code>. Con <code>../../../../etc/passwd</code> el atacante escapa del directorio previsto y lee (o incluye) archivos fuera de /var/www/docs. Hay que usar una lista blanca de archivos permitidos y <code>basename()</code>/<code>realpath()</code>."
+    },
+    { id:6, topic:"Subida de archivos maliciosos", type:"line",
+      prompt:"Este código gestiona la subida de la foto de perfil. ¿Qué línea es la vulnerable?",
+      code:[
+        "$nombre = $_FILES['foto']['name'];",
+        "$destino = \"uploads/\" . $nombre;",
+        "move_uploaded_file($_FILES['foto']['tmp_name'], $destino);",
+        "echo \"Archivo subido correctamente\";"
+      ], correct:2,
+      explanation:"La línea C guarda el archivo sin comprobar su tipo ni su extensión reales. Un atacante puede subir <code>shell.php</code> camuflado como <code>shell.php.jpg</code> y, si el servidor lo ejecuta, obtener acceso remoto. Hay que validar el tipo real, renombrar el archivo y guardarlo fuera de la raíz web."
+    },
+    { id:7, topic:"Almacenamiento débil de contraseñas", type:"line",
+      prompt:"Este código registra un usuario nuevo. La consulta ya está parametrizada. ¿Qué línea es la insegura?",
+      code:[
+        "$user = $_POST['usuario'];",
+        "$pass = $_POST['clave'];",
+        "$hash = md5($pass);",
+        "$db->prepare(\"INSERT INTO usuarios (usuario, hash) VALUES (?, ?)\")->execute([$user, $hash]);"
+      ], correct:2,
+      explanation:"La línea C usa MD5, un algoritmo rapidísimo y sin sal: con GPUs o tablas rainbow se rompen contraseñas débiles en segundos. Hay que usar un algoritmo diseñado para contraseñas (<code>password_hash</code> con bcrypt o Argon2). La línea D está bien: la consulta parametrizada evita la inyección SQL."
+    },
+    { id:8, topic:"Control de acceso roto (IDOR)", type:"opt",
+      prompt:"Esta API devuelve la factura que se pide por id. La consulta ya está parametrizada, así que no hay inyección SQL. ¿Qué fallo de seguridad sigue habiendo?",
+      code:[
+        "// GET /factura?id=1042   (usuario autenticado)",
+        "$id = $_GET['id'];",
+        "$f = $db->prepare(\"SELECT * FROM facturas WHERE id = ?\");",
+        "$f->execute([$id]); echo json_encode($f->fetch());"
+      ],
+      options:[
+        "No se comprueba que la factura pertenezca al usuario autenticado",
+        "La respuesta debería ir cifrada con AES-256 en el servidor",
+        "El parámetro debería enviarse por POST en lugar de GET",
+        "Falta un captcha antes de hacer la consulta"
+      ], correct:0,
+      explanation:"Es un IDOR (referencia directa insegura a objetos), un caso de control de acceso roto, una de las categorías más graves del OWASP Top 10. Cambiando <code>id=1042</code> por <code>1043</code> se leen facturas de otros usuarios. El servidor debe comprobar siempre que el recurso pertenece a quien lo pide. POST o un captcha no lo evitan."
+    },
+    { id:9, topic:"Credenciales en el código", type:"line",
+      prompt:"Este código conecta con la base de datos de clientes. ¿Qué línea es la más peligrosa?",
+      code:[
+        "$host = \"db.interna.local\";",
+        "$dbuser = \"app_clientes\";",
+        "$dbpass = \"Verano2024!\";",
+        "$conn = new mysqli($host, $dbuser, $dbpass, \"clientes\");"
+      ], correct:2,
+      explanation:"La línea C deja la contraseña escrita en el código fuente: acaba en el repositorio, en copias y en las manos de cualquiera con acceso al código. Hay que leerla de variables de entorno o de un gestor de secretos y, si ya se subió, darla por comprometida y rotarla."
+    },
+    { id:10, topic:"Cookies de sesión sin proteger", type:"opt",
+      prompt:"La aplicación guarda el identificador de sesión así. El token está bien generado. ¿Qué atributos le faltan a la cookie para protegerla del robo por XSS y de la interceptación en red?",
+      code:[
+        "$token = bin2hex(random_bytes(32));",
+        "setcookie(\"sesion\", $token);"
+      ],
+      options:[
+        "HttpOnly y Secure (y SameSite)",
+        "Una fecha de expiración más larga",
+        "Un nombre de cookie más largo y aleatorio",
+        "Codificar el valor en Base64"
+      ], correct:0,
+      explanation:"<code>HttpOnly</code> impide que JavaScript (y por tanto un XSS) lea la cookie; <code>Secure</code> hace que solo viaje por HTTPS; <code>SameSite</code> reduce el riesgo de CSRF. La expiración, el nombre o la codificación en Base64 no protegen la cookie."
+    }
+  ];
+
+  var KEY = "nunsys-reto-vuln-v3";
+  function fresh(){ return {screen:"play", current:0, picks:{}, answers:{}}; }
+  var state = fresh();
+  try{
+    var raw = localStorage.getItem(KEY);
+    if(raw){ var s = JSON.parse(raw); if(s && s.answers){ state = s; } }
+  }catch(e){}
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+
+  var root = document.getElementById("app");
+  function el(tag, cls, html){ var e = document.createElement(tag); if(cls) e.className = cls; if(html !== undefined) e.innerHTML = html; return e; }
+  function escapeHtml(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function letter(i){ return String.fromCharCode(65+i); }
+
+  function render(){
+    root.innerHTML = "";
+    if(state.screen === "end") renderEnd(); else renderPlay();
+    save();
+  }
+
+  function renderPlay(){
+    var app = el("div","app");
+    var top = el("div","topbar");
+    top.appendChild(el("div","brand","<span class='dot'></span> Caza la Vulnerabilidad"));
+    var prog = el("div","progress");
+    QUESTIONS.forEach(function(q, i){
+      var b = document.createElement("button");
+      b.textContent = i+1; b.setAttribute("aria-label","Ir a la pregunta " + (i+1));
+      var a = state.answers[q.id];
+      if(i === state.current) b.className = "active";
+      else if(a) b.className = a.ok ? "ok" : "bad";
+      b.addEventListener("click", function(){ state.current = i; render(); });
+      prog.appendChild(b);
+    });
+    top.appendChild(prog);
+    var reset = el("button","reset-link","Reiniciar");
+    reset.addEventListener("click", function(){ if(confirm("¿Borrar tus respuestas y empezar de nuevo?")){ state = fresh(); render(); } });
+    top.appendChild(reset);
+    app.appendChild(top);
+    var layout = el("div","layout"); layout.appendChild(renderStage()); app.appendChild(layout);
+    root.appendChild(app);
+  }
+
+  function renderStage(){
+    var q = QUESTIONS[state.current];
+    var ans = state.answers[q.id];
+    var stage = el("div","stage");
+    stage.appendChild(el("div","kicker","Pregunta " + (state.current+1) + " de " + QUESTIONS.length));
+    var pc = el("div","prompt-card"); pc.style.marginBottom = "0";
+    pc.appendChild(el("div","prompt-text", q.prompt));
+    stage.appendChild(pc);
+
+    // code block
+    var block = el("div","code-block");
+    q.code.forEach(function(line, i){
+      var selectable = (q.type === "line" && !ans);
+      var row = el("div","code-line" + (selectable ? " selectable" : ""));
+      var picked = (ans ? ans.pick : state.picks[q.id]);
+      if(q.type === "line"){
+        if(ans && i === q.correct) row.classList.add("correct");
+        else if(ans && !ans.ok && picked === i) row.classList.add("wrong-pick");
+        else if(!ans && picked === i) row.classList.add("picked");
+      }
+      row.appendChild(el("span","ln", String(i+1)));
+      if(q.type === "line") row.appendChild(el("span","tag", letter(i)));
+      var code = el("span", null, escapeHtml(line)); code.style.whiteSpace = "pre";
+      row.appendChild(code);
+      if(selectable) row.addEventListener("click", function(){ state.picks[q.id] = i; render(); });
+      block.appendChild(row);
+    });
+    stage.appendChild(block);
+
+    // options
+    if(q.type === "opt"){
+      var wrap = el("div","options-row");
+      q.options.forEach(function(opt, i){
+        var b = el("button","opt-btn");
+        var picked = (ans ? ans.pick : state.picks[q.id]);
+        if(ans){
+          if(i === q.correct) b.classList.add("correct");
+          else if(!ans.ok && picked === i) b.classList.add("wrong");
+          b.disabled = true;
+        } else if(picked === i){ b.classList.add("picked"); }
+        b.innerHTML = "<span class='tag'>" + letter(i) + "</span><span>" + escapeHtml(opt) + "</span>";
+        if(!ans) b.addEventListener("click", function(){ state.picks[q.id] = i; render(); });
+        wrap.appendChild(b);
+      });
+      stage.appendChild(wrap);
+    }
+
+    // answer / feedback
+    if(!ans){
+      var hint = q.type === "line" ? "Haz clic en la línea que crees vulnerable y pulsa Responder." : "Elige una opción y pulsa Responder.";
+      var row = el("div","reveal-row");
+      var btn = el("button","btn primary","Responder");
+      btn.disabled = (state.picks[q.id] === undefined);
+      btn.addEventListener("click", function(){
+        var pick = state.picks[q.id];
+        state.answers[q.id] = {pick:pick, ok:(pick === q.correct)};
+        render();
+      });
+      row.appendChild(btn);
+      row.appendChild(el("span","hint", hint));
+      stage.appendChild(row);
+    } else {
+      var correctTxt = q.type === "line" ? ("La línea correcta era la " + letter(q.correct) + ".") : ("La respuesta correcta era la " + letter(q.correct) + ".");
+      var box = el("div","explain " + (ans.ok ? "ok" : "bad"));
+      box.innerHTML = "<span class='label'>" + (ans.ok ? "\u2713 \u00a1Correcto! " : "\u2717 Incorrecto. ") + (ans.ok ? "" : correctTxt + " ") + "<span style='font-weight:600;opacity:.8'>· " + q.topic + "</span></span>" + q.explanation;
+      stage.appendChild(box);
+    }
+
+    var nav = el("div","footer-nav");
+    var prev = el("button","btn ghost","\u2190 Anterior"); prev.disabled = state.current === 0;
+    prev.addEventListener("click", function(){ state.current = Math.max(0, state.current-1); render(); });
+    var last = state.current === QUESTIONS.length-1;
+    var next = el("button","btn", last ? "Ver resultado" : "Siguiente \u2192");
+    next.addEventListener("click", function(){ if(last){ state.screen = "end"; } else { state.current++; } render(); });
+    nav.appendChild(prev); nav.appendChild(next);
+    stage.appendChild(nav);
+    return stage;
+  }
+
+  function verdict(n, total){
+    var p = n/total;
+    if(p >= 0.9) return "¡Excelente! Tienes ojo de auditor.";
+    if(p >= 0.7) return "Muy bien: base sólida. Repasa los fallos de abajo.";
+    if(p >= 0.5) return "Vas por buen camino. Repasa los comentarios de cada fallo.";
+    return "Toca repasar: lee las explicaciones de abajo y vuelve a intentarlo.";
+  }
+
+  function renderEnd(){
+    var total = QUESTIONS.length;
+    var good = QUESTIONS.filter(function(q){ var a = state.answers[q.id]; return a && a.ok; });
+    var n = good.length;
+    var unanswered = QUESTIONS.filter(function(q){ return !state.answers[q.id]; }).length;
+
+    var wrap = el("div","end");
+    var card = el("div","end-card result");
+    card.appendChild(el("div","kicker","Resultado final"));
+    card.appendChild(el("div","score-big","<b>" + n + "</b><span> / " + total + "</span>"));
+    var bar = el("div","score-bar"), fill = el("div","score-fill"); fill.style.width = Math.round(n/total*100) + "%"; bar.appendChild(fill);
+    card.appendChild(bar);
+    card.appendChild(el("p","verdict", verdict(n, total)));
+    card.appendChild(el("p","score-detail", n + " aciertos, " + (total - n - unanswered) + " fallos" + (unanswered ? " y " + unanswered + " sin responder" : "") + "."));
+
+    var missed = QUESTIONS.filter(function(q){ var a = state.answers[q.id]; return !a || !a.ok; });
+    if(missed.length){
+      card.appendChild(el("h2",null,"Comentarios de los fallos"));
+      missed.forEach(function(q){
+        var a = state.answers[q.id];
+        var item = el("div","review-item");
+        var yours, right;
+        if(q.type === "line"){
+          yours = a ? ("Línea " + letter(a.pick) + ": <code>" + escapeHtml(q.code[a.pick]) + "</code>") : "<em>sin responder</em>";
+          right = "Línea " + letter(q.correct) + ": <code>" + escapeHtml(q.code[q.correct]) + "</code>";
+        } else {
+          yours = a ? (letter(a.pick) + ". " + escapeHtml(q.options[a.pick])) : "<em>sin responder</em>";
+          right = letter(q.correct) + ". " + escapeHtml(q.options[q.correct]);
+        }
+        item.innerHTML = "<div class='r-title'>PREGUNTA " + q.id + " · " + q.topic.toUpperCase() + "</div><div class='r-prompt'>" + q.prompt + "</div>" +
+          "<div class='r-line'><span>Tu respuesta</span><div>" + yours + "</div></div>" +
+          "<div class='r-line'><span>Correcta</span><div>" + right + "</div></div>" +
+          "<div class='r-exp'>" + q.explanation + "</div>";
+        card.appendChild(item);
+      });
+    } else {
+      card.appendChild(el("p","verdict","Sin ningún fallo. Buen trabajo."));
+    }
+
+    var row = el("div","end-actions");
+    var review = el("button","btn primary","Revisar las preguntas");
+    review.addEventListener("click", function(){ state.screen = "play"; state.current = 0; render(); });
+    var again = el("button","btn ghost","Repetir el reto");
+    again.addEventListener("click", function(){ state = fresh(); render(); });
+    row.appendChild(review); row.appendChild(again);
+    card.appendChild(row);
+    wrap.appendChild(card);
+    root.appendChild(wrap);
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
